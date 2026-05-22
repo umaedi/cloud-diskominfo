@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1779419285804,
+      "tag": "0000_tidy_glorian",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1779420918917,
+      "tag": "0001_bitter_doctor_faustus",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1779422957322,
+      "tag": "0002_bored_vulcan",
+      "breakpoints": true
+    }
+  ]
+}
