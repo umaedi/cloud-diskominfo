@@ -74,6 +74,22 @@ export class FirebaseService {
           ...(image ? { imageUrl: image } : {}),
         },
         data: dataPayload,
+        android: {
+          priority: 'high',
+          notification: {
+            sound: 'default',
+            clickAction: 'FLUTTER_NOTIFICATION_CLICK',
+            channelId: 'high_importance_channel',
+          },
+        },
+        apns: {
+          payload: {
+            aps: {
+              sound: 'default',
+              badge: 1,
+            },
+          },
+        },
       };
 
       await messaging.send(message);
@@ -131,6 +147,22 @@ export class FirebaseService {
             ...(image ? { imageUrl: image } : {}),
           },
           data: dataPayload,
+          android: {
+            priority: 'high',
+            notification: {
+              sound: 'default',
+              clickAction: 'FLUTTER_NOTIFICATION_CLICK',
+              channelId: 'high_importance_channel',
+            },
+          },
+          apns: {
+            payload: {
+              aps: {
+                sound: 'default',
+                badge: 1,
+              },
+            },
+          },
         };
 
         const report = await messaging.sendEachForMulticast(message);

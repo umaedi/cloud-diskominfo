@@ -1,4 +1,4 @@
-import { mysqlTable, varchar, int, timestamp, text, boolean } from 'drizzle-orm/mysql-core';
+import { mysqlTable, varchar, int, timestamp, text, boolean, bigint, mysqlEnum, datetime } from 'drizzle-orm/mysql-core';
 
 export const uploadedImages = mysqlTable('uploaded_images', {
   id: varchar('id', { length: 36 }).primaryKey(),
@@ -30,33 +30,35 @@ export type Setting = typeof settings.$inferSelect;
 export type NewSetting = typeof settings.$inferInsert;
 
 export const fcmTokens = mysqlTable('fcm_tokens', {
-  id: int('id').primaryKey().autoincrement(),
-  userId: varchar('user_id', { length: 255 }).notNull(),
-  fcmToken: text('fcm_token').notNull(),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().onUpdateNow().notNull(),
+  id: bigint('id', { mode: 'number' }).primaryKey().autoincrement(),
+  userId: varchar('user_id', { length: 36 }).notNull().unique(),
+  fcmToken: text('fcm_token'),
+  createdAt: timestamp('created_at'),
+  updatedAt: timestamp('updated_at'),
 });
 
 export type FcmToken = typeof fcmTokens.$inferSelect;
 export type NewFcmToken = typeof fcmTokens.$inferInsert;
 
 export const notifications = mysqlTable('notifications', {
-  id: int('id').primaryKey().autoincrement(),
-  userId: varchar('user_id', { length: 255 }),
+  id: varchar('id', { length: 36 }).primaryKey(),
+  userId: text('user_id'),
   fcmToken: text('fcm_token'),
-  title: varchar('title', { length: 255 }).notNull(),
-  body: text('body').notNull(),
+  title: varchar('title', { length: 255 }),
+  body: text('body'),
+  type: mysqlEnum('type', ['broadcast', 'payment_status']).default('broadcast').notNull(),
   image: text('image'),
-  url: text('url'),
   scheduledAt: timestamp('scheduled_at').defaultNow().notNull(),
   isMulticast: boolean('is_multicast').default(false).notNull(),
-  screen: varchar('screen', { length: 255 }).default('BeritaScreen').notNull(),
-  read: int('read').default(0).notNull(),
-  status: varchar('status', { length: 50 }).default('pending').notNull(),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
-  updatedAt: timestamp('updated_at').defaultNow().onUpdateNow().notNull(),
+  read: boolean('read').default(false).notNull(),
+  status: mysqlEnum('status', ['pending', 'sent', 'failed']).default('pending').notNull(),
+  url: varchar('url', { length: 255 }),
+  screen: varchar('screen', { length: 255 }),
+  createdAt: timestamp('created_at'),
+  updatedAt: timestamp('updated_at'),
 });
 
 export type Notification = typeof notifications.$inferSelect;
 export type NewNotification = typeof notifications.$inferInsert;
+
 

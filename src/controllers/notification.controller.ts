@@ -1,5 +1,6 @@
 import { Context } from 'hono';
 import { z } from 'zod';
+import { v4 as uuidv4 } from 'uuid';
 import { db } from '../config/db.js';
 import { notifications, fcmTokens } from '../db/schema.js';
 import { eq, and, gte, lte, sql, isNotNull, count } from 'drizzle-orm';
@@ -11,8 +12,14 @@ const storeNotificationSchema = z.object({
   fcm_token: z.string().optional().nullable(),
   title: z.string().min(1, 'Title wajib diisi'),
   body: z.string().min(1, 'Body wajib diisi'),
-  schedule: z.boolean().optional().default(false),
-  is_multicast: z.boolean().optional().default(false),
+  schedule: z.preprocess((val) => {
+    if (val === 'true' || val === 1 || val === '1' || val === true) return true;
+    return false;
+  }, z.boolean()).optional().default(false),
+  is_multicast: z.preprocess((val) => {
+    if (val === 'true' || val === 1 || val === '1' || val === true) return true;
+    return false;
+  }, z.boolean()).optional().default(false),
   url: z.string().optional().nullable(),
   image: z.string().optional().nullable(),
   scheduled_at: z.string().optional().nullable(),
@@ -44,7 +51,7 @@ export class NotificationController {
 
         let queryConditions = [
           eq(notifications.userId, userId),
-          eq(notifications.read, 0)
+          eq(notifications.read, false)
         ];
 
         let message = 'Data notifikasi hari ini';
@@ -68,7 +75,7 @@ export class NotificationController {
           id: item.id,
           title: item.title,
           body: item.body,
-          date: indonesianDateFormatter.format(item.createdAt),
+          date: item.createdAt ? indonesianDateFormatter.format(item.createdAt) : indonesianDateFormatter.format(new Date()),
           status: item.status,
           read: item.read,
         }));
@@ -119,7 +126,6 @@ export class NotificationController {
   public static async store(c: Context) {
     try {
       const body = await c.req.json().catch(() => ({}));
-
       const parsed = storeNotificationSchema.safeParse(body);
       if (!parsed.success) {
         return c.json({
@@ -135,7 +141,9 @@ export class NotificationController {
 
       const scheduledAtDate = data.scheduled_at ? new Date(data.scheduled_at) : new Date();
 
+      const notificationId = uuidv4();
       const notificationData = {
+        id: notificationId,
         userId: data.user_id || null,
         fcmToken: data.fcm_token || null,
         title: data.title,
@@ -145,17 +153,17 @@ export class NotificationController {
         scheduledAt: scheduledAtDate,
         isMulticast,
         screen: 'BeritaScreen',
-        read: 0,
-        status: 'pending',
+        read: false,
+        status: 'pending' as const,
+        createdAt: new Date(),
       };
 
       // 1. Create notification in database
-      const insertResult = await db.insert(notifications).values(notificationData);
-      const insertedId = insertResult[0].insertId;
+      await db.insert(notifications).values(notificationData);
 
       // Prepare metadata payload
       const extraPayload: Record<string, string> = {
-        id: String(insertedId),
+        id: notificationId,
         title: data.title,
         body: data.body,
         url: data.url || '',
@@ -169,11 +177,11 @@ export class NotificationController {
 
       // 2. Handle scheduled case
       if (shouldSchedule) {
-        console.log('Notifikasi terjadwal berhasil dibuat:', insertedId);
+        console.log('Notifikasi terjadwal berhasil dibuat:', notificationId);
         return c.json({
           success: true,
           message: 'Notifikasi terjadwal berhasil dibuat',
-          data: { id: insertedId, ...notificationData },
+          data: notificationData,
         }, 201);
       }
 
@@ -185,7 +193,7 @@ export class NotificationController {
             .select({ token: fcmTokens.fcmToken })
             .from(fcmTokens)
             .where(isNotNull(fcmTokens.fcmToken));
-          const tokens = tokenResults.map((r) => r.token);
+          const tokens = tokenResults.map((r) => r.token).filter((t): t is string => t !== null);
 
           if (tokens.length > 0) {
             await FirebaseService.sendPushNotificationToMultipleDevices(
@@ -226,16 +234,15 @@ export class NotificationController {
         await db
           .update(notifications)
           .set({ status: 'sent', updatedAt: new Date() })
-          .where(eq(notifications.id, insertedId));
+          .where(eq(notifications.id, notificationId));
 
         const updatedRecord = {
-          id: insertedId,
           ...notificationData,
-          status: 'sent',
+          status: 'sent' as const,
           updatedAt: new Date(),
         };
 
-        console.log('Notifikasi berhasil dikirim:', insertedId);
+        console.log('Notifikasi berhasil dikirim:', notificationId);
         return c.json({
           success: true,
           message: 'Notifikasi berhasil dikirim',
@@ -248,7 +255,7 @@ export class NotificationController {
         return c.json({
           success: true,
           message: 'Notifikasi tersimpan namun gagal dikirim via Firebase',
-          data: { id: insertedId, ...notificationData },
+          data: notificationData,
           warning: err.message,
         }, 201);
       }
@@ -278,7 +285,7 @@ export class NotificationController {
         }, 404);
       }
 
-      const id = parseInt(idStr, 10);
+      const id = idStr;
 
       const results = await db
         .select()
@@ -296,13 +303,13 @@ export class NotificationController {
       // Mark as read and sent
       await db
         .update(notifications)
-        .set({ read: 1, status: 'sent', updatedAt: new Date() })
+        .set({ read: true, status: 'sent', updatedAt: new Date() })
         .where(eq(notifications.id, id));
 
       const updatedRecord = {
         ...results[0],
-        read: 1,
-        status: 'sent',
+        read: true,
+        status: 'sent' as const,
         updatedAt: new Date(),
       };
 
@@ -348,7 +355,7 @@ export class NotificationController {
       if (readParam !== undefined && readParam !== null) {
         const readVal = parseInt(readParam, 10);
         if (readVal === 0 || readVal === 1) {
-          conditions.push(eq(notifications.read, readVal));
+          conditions.push(eq(notifications.read, readVal === 1));
         }
       }
 
