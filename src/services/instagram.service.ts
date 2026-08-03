@@ -10,7 +10,7 @@ export class InstagramService {
 
   /**
    * Retrieves the active access token. Automatically handles self-refreshing
-   * if the stored token is approaching expiration.
+   * if the stored token is approaching expiration, and syncs from env if updated.
    */
   public static async getActiveToken(): Promise<string> {
     // 1. Fetch token configuration from database
@@ -24,7 +24,15 @@ export class InstagramService {
       expiresAt = results[0].expiresAt;
     }
 
-    // 2. If no token in DB, bootstrap using env configuration
+    // 2. If env token is provided and differs from DB token, sync DB with env token
+    if (env.INSTAGRAM_TOKEN && env.INSTAGRAM_TOKEN !== dbToken) {
+      console.log('Detected updated INSTAGRAM_TOKEN in environment. Updating database token...');
+      const defaultExpiration = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000);
+      await this.saveTokenToDb(env.INSTAGRAM_TOKEN, defaultExpiration);
+      return env.INSTAGRAM_TOKEN;
+    }
+
+    // 3. If no token in DB
     if (!dbToken) {
       if (!env.INSTAGRAM_TOKEN) {
         throw new Error('No Instagram token found. Set INSTAGRAM_TOKEN in .env or run manual setup.');
@@ -38,12 +46,12 @@ export class InstagramService {
       return env.INSTAGRAM_TOKEN;
     }
 
-    // 3. Check expiration
+    // 4. Check expiration
     const now = Date.now();
     const expirationTime = expiresAt ? expiresAt.getTime() : 0;
     const timeRemaining = expirationTime - now;
 
-    // 4. Self-healing/Auto-refresh: If expired or approaching expiration (less than 15 days left)
+    // 5. Self-healing/Auto-refresh: If expired or approaching expiration (less than 15 days left)
     if (timeRemaining < this.REFRESH_THRESHOLD_MS) {
       console.log(`Instagram token expires at ${expiresAt?.toISOString()}. Refreshing token...`);
       try {
@@ -57,6 +65,15 @@ export class InstagramService {
           console.warn('Falling back to currently active (but near-expiration) token.');
           return dbToken;
         }
+
+        // If auto-refresh failed and token is expired, attempt fallback to INSTAGRAM_TOKEN from env
+        if (env.INSTAGRAM_TOKEN) {
+          console.log('Attempting fallback to INSTAGRAM_TOKEN from environment...');
+          const defaultExpiration = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000);
+          await this.saveTokenToDb(env.INSTAGRAM_TOKEN, defaultExpiration);
+          return env.INSTAGRAM_TOKEN;
+        }
+
         throw new Error(`Instagram token has expired, and auto-refresh failed: ${err.message}`);
       }
     }

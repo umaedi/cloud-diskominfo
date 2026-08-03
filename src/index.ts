@@ -38,6 +38,7 @@ app.delete('/api/images/:id', UploadController.delete);
 
 // Instagram Routes
 app.get('/api/instagram', InstagramController.index);
+app.get('/api/instagram/', InstagramController.index);
 app.get('/api/instagram/:id', InstagramController.show);
 app.post('/api/instagram/refresh', InstagramController.manualRefresh);
 
